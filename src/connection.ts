@@ -47,7 +47,7 @@ export class Connection {
 
   #readyState: ReadyState;
 
-  constructor(endpoint: string, opts: ConnectionOpts = {}) {
+  constructor(endpoint: string | URL, opts: ConnectionOpts = {}) {
     const url = new URL(endpoint, globalThis.origin);
     this.url = url.href;
     this.withCredentials = opts.withCredentials ?? false;
