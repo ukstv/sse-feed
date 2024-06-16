@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "module": "NodeNext",
+    "target": "ES2022",
+    "resolveJsonModule": false,
+    "moduleResolution": "NodeNext",
+    "allowSyntheticDefaultImports": true,
+    "declaration": true,
+    "declarationMap": false,
+    "skipLibCheck": true,
+    "removeComments": false,
+    "sourceMap": false,
+    "inlineSourceMap": false,
+    "inlineSources": false,
+    "strict": true,
+    "rootDir": "src/",
+    "outDir": "dist/",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  },
+  "include": ["./src/**/*"]
+}

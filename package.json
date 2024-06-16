@@ -1,0 +1,30 @@
+{
+  "name": "sse-feed",
+  "version": "0.0.1",
+  "description": "SSE as a ReadableStream",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "./node_modules/.bin/tsx ./node_modules/uvu/bin.js . .+\\.test\\.ts",
+    "test:watch": "./node_modules/.bin/watchlist --eager src -- pnpm run test"
+  },
+  "keywords": [
+    "server-sent events",
+    "sse",
+    "readable-stream",
+    "stream",
+    "feed"
+  ],
+  "author": "Sergey Ukustov <sergey@ukstv.me>",
+  "license": "(MIT OR Apache-2.0)",
+  "devDependencies": {
+    "@types/sinon": "^17.0.3",
+    "hono": "^4.4.6",
+    "prettier": "^3.3.2",
+    "sinon": "^18.0.0",
+    "tsx": "^4.15.4",
+    "typescript": "^5.4.5",
+    "uvu": "^0.5.6",
+    "watchlist": "^0.3.1"
+  }
+}
