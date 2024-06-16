@@ -26,5 +26,8 @@
     "typescript": "^5.4.5",
     "uvu": "^0.5.6",
     "watchlist": "^0.3.1"
+  },
+  "dependencies": {
+    "nanoevents": "^9.0.0"
   }
 }

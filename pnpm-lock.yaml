@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      nanoevents:
+        specifier: ^9.0.0
+        version: 9.0.0
     devDependencies:
       '@types/sinon':
         specifier: ^17.0.3
@@ -237,6 +241,10 @@ packages:
     resolution: {integrity: sha512-tzzskb3bG8LvYGFF/mDTpq3jpI6Q9wc3LEmBaghu+DdCssd1FakN7Bc0hVNmEyGq1bq3RgfkCb3cmQLpNPOroA==}
     engines: {node: '>=4'}
 
+  nanoevents@9.0.0:
+    resolution: {integrity: sha512-X8pU7IOpgKXVLPxYUI55ymXc8XuBE+uypfEyEFBtHkD1EX9KavYTVc+vXZHFyHKzA1TaZoVDqklLdQBBrxIuAw==}
+    engines: {node: ^18.0.0 || >=20.0.0}
+
   nise@6.0.0:
     resolution: {integrity: sha512-K8ePqo9BFvN31HXwEtTNGzgrPpmvgciDsFz8aztFjt4LqKO/JeFD8tBOeuDiCMXrIl/m1YvfH8auSpxfaD09wg==}
 
@@ -431,6 +439,8 @@ snapshots:
   lodash.get@4.4.2: {}
 
   mri@1.2.0: {}
+
+  nanoevents@9.0.0: {}
 
   nise@6.0.0:
     dependencies:
