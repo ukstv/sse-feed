@@ -9,10 +9,10 @@ import { once } from "./typed-event-target.js";
 
 function makeServer(path: string, handler: Handler, port?: number): Promise<FauxServer> {
   const app = new Hono().use("*", cors({ origin: "*" })).get(path, handler);
-  return FauxServer.listen(app, 3000);
+  return FauxServer.listen(app, port);
 }
 
-test("establish connection", async () => {
+test("establish and close connection", async () => {
   const server = await makeServer("/feed", (c) => {
     return streamSSE(c, async (stream) => {
       let id = 0;
