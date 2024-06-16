@@ -7,11 +7,12 @@ import { cors } from "hono/cors";
 import { Connection, ReadyState } from "./connection.js";
 import { once } from "./typed-event-target.js";
 
+let feedID = 0;
+let reconnectFeedId = 0;
 const APP = new Hono()
   .use("*", cors({ origin: "*" }))
   .get("/feed", (c) =>
     streamSSE(c, async (stream) => {
-      let id = 0;
       let canContinue = true;
       stream.onAbort(() => {
         canContinue = false;
@@ -20,21 +21,20 @@ const APP = new Hono()
         await stream.writeSSE({
           data: `It is ${new Date().toISOString()}`,
           event: "time-update",
-          id: String(id++),
+          id: String(feedID++),
         });
       }
     }),
   )
-  .get("/reconnect-feed", async (c) =>
-    streamSSE(c, async (stream) => {
-      let id = 0;
+  .get("/reconnect-feed", async (c) => {
+    return streamSSE(c, async (stream) => {
       await stream.writeSSE({
         data: `It is ${new Date().toISOString()}`,
         event: "time-update",
-        id: String(id++),
+        id: String(reconnectFeedId++),
       });
-    }),
-  );
+    });
+  });
 
 const server = await FauxServer.listen(APP);
 
@@ -51,18 +51,6 @@ test.after(async () => {
 //   connection.close();
 //   assert.equal(connection.readyState, ReadyState.CLOSED);
 // });
-
-test("redirect 301", async () => {
-  console.log("reconnecting...");
-  const endpoint = new URL("/feed", server.url);
-  console.log("endpoint", endpoint.href);
-  const connection = new Connection(endpoint);
-  await once(connection, "open");
-  console.log("a.0");
-  // await new Promise((resolve) => setTimeout(resolve, 100000));
-  console.log("a.1");
-  connection.close();
-});
 
 // TEST: get stream
 // TEST: redirect 301, redirect 307
