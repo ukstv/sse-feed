@@ -1,27 +1,41 @@
 import { test } from "uvu";
-import { Hono } from "hono";
+import * as assert from "uvu/assert";
+import { Hono, type Handler } from "hono";
 import { streamSSE } from "hono/streaming";
 import { FauxServer } from "./__tests__/faux-server.js";
-import { Connection } from "./connection.js";
+import { cors } from "hono/cors";
+import { Connection, ReadyState } from "./connection.js";
+import { once } from "./typed-event-target.js";
+
+function makeServer(path: string, handler: Handler, port?: number): Promise<FauxServer> {
+  const app = new Hono().use("*", cors({ origin: "*" })).get(path, handler);
+  return FauxServer.listen(app, 3000);
+}
 
 test("establish connection", async () => {
-  let id = 0;
-  const app = new Hono().get("/feed", (c) => {
+  const server = await makeServer("/feed", (c) => {
     return streamSSE(c, async (stream) => {
-      let n = 0;
-      while (n < 3) {
-        const message = `It is ${new Date().toISOString()}`;
+      let id = 0;
+      let canContinue = true;
+      stream.onAbort(() => {
+        canContinue = false;
+      });
+      while (canContinue) {
         await stream.writeSSE({
-          data: message,
+          data: `It is ${new Date().toISOString()}`,
           event: "time-update",
           id: String(id++),
         });
       }
     });
   });
-  const server = await FauxServer.listen(app, 3000);
   const endpoint = new URL("/feed", server.url);
   const connection = new Connection(endpoint);
+  assert.equal(connection.readyState, ReadyState.CONNECTING);
+  await once(connection, "open");
+  assert.equal(connection.readyState, ReadyState.OPEN);
+  connection.close();
+  assert.equal(connection.readyState, ReadyState.CLOSED);
   await server.close();
 });
 
