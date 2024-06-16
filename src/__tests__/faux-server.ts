@@ -18,6 +18,14 @@ export class FauxServer {
     this.#port = port;
   }
 
+  get port(): number {
+    return this.#port;
+  }
+
+  get url(): URL {
+    return new URL(`http://localhost:${this.port}/`);
+  }
+
   static async listen(hono: Hono, port?: number): Promise<FauxServer> {
     let effectivePort = port || (await getPort());
     const server = new FauxServer(hono, effectivePort);

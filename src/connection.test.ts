@@ -19,7 +19,8 @@ test("establish connection", async () => {
     });
   });
   const server = await FauxServer.listen(app, 3000);
-
+  const r = await fetch(new URL("/feed", server.url));
+  console.log("r", r);
   await server.close();
 });
 
