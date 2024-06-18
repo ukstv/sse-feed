@@ -58,7 +58,6 @@ class ErrorEvent extends TypedEvent<"error"> {
 type F = UnderlyingSource<Uint8Array>;
 
 export class Connection extends TypedEventTarget<ConnectionEvents> {
-  #shallReconnect: boolean;
   #abortController: AbortController;
 
   constructor(
@@ -66,7 +65,6 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
     readonly init: RequestInit,
   ) {
     super();
-    this.#shallReconnect = true;
     this.#abortController = new AbortController();
   }
 
