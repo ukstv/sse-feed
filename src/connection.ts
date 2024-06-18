@@ -82,6 +82,17 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
         this.dispatchEvent(new ErrorEvent(e as Error));
         continue;
       }
+      const b = response.body
+      if (b) {
+        const reader = b.getReader()
+        while (this.#shallReconnect) {
+          const next = await reader.read()
+          if (next.value) {
+            controller.enqueue(next.value)
+          }
+        }
+      }
+
       const body = response.body as unknown as null | AsyncIterable<Uint8Array>;
       if (body) {
         try {
