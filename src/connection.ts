@@ -59,6 +59,7 @@ type F = UnderlyingSource<Uint8Array>;
 
 export class Connection extends TypedEventTarget<ConnectionEvents> {
   #shallReconnect: boolean;
+  #abortController: AbortController;
 
   constructor(
     readonly url: URL,
@@ -66,49 +67,55 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
   ) {
     super();
     this.#shallReconnect = true;
+    this.#abortController = new AbortController();
   }
 
   stream(): ReadableStream<Uint8Array> {
     return new ReadableStream(this);
   }
 
+  get isAborted(): boolean {
+    return this.#abortController.signal.aborted;
+  }
+
   async start(controller: ReadableStreamDefaultController<Uint8Array>) {
-    while (this.#shallReconnect) {
-      const abortController = new AbortController();
+    while (!this.isAborted) {
       let response: Response;
+      const connectionAbort = new AbortController();
       try {
-        response = await fetch(this.url, { ...this.init, signal: abortController.signal });
+        const signal = AbortSignal.any([connectionAbort.signal, this.#abortController.signal]);
+        response = await fetch(this.url, { ...this.init, signal: signal });
       } catch (e) {
         this.dispatchEvent(new ErrorEvent(e as Error));
         continue;
       }
-      const b = response.body
-      if (b) {
-        const reader = b.getReader()
-        while (this.#shallReconnect) {
-          const next = await reader.read()
-          if (next.value) {
-            controller.enqueue(next.value)
-          }
-        }
+      const body = response.body;
+      if (!body) {
+        const error = new Error(`Empty body received`);
+        connectionAbort.abort(error);
+        this.dispatchEvent(new ErrorEvent(error));
+        continue;
       }
-
-      const body = response.body as unknown as null | AsyncIterable<Uint8Array>;
-      if (body) {
-        try {
-          for await (const r of body) {
-            controller.enqueue(r);
-          }
-        } catch (e) {
-          abortController.abort(e);
-          this.dispatchEvent(new ErrorEvent(e as Error));
+      const reader = body.getReader();
+      try {
+        let shallRead = true;
+        while (!this.isAborted && shallRead) {
+          const next = await reader.read();
+          if (next.value) controller.enqueue(next.value);
+          if (next.done) shallRead = false;
         }
+      } catch (e) {
+        this.dispatchEvent(new ErrorEvent(e as Error));
       }
     }
   }
 
-  async cancel(reason: Error) {
-    this.#shallReconnect = false;
+  cancel(reason: Error): void {
+    this.#abortController.abort(reason);
+  }
+
+  close() {
+    this.#abortController.abort("ABORT");
   }
 }
 
