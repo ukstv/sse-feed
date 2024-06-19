@@ -33,6 +33,15 @@ export class FauxServer {
     return server;
   }
 
+  static async with(app: Hono, cb: (url: URL) => Promise<void>) {
+    const server = await FauxServer.listen(app);
+    try {
+      await cb(server.url);
+    } finally {
+      await server.close();
+    }
+  }
+
   private async start() {
     if (this.#server) {
       throw new Error(`Can not start a server twice`);
