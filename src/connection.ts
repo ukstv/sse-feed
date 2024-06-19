@@ -88,10 +88,13 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
     return new ReadableStream(this);
   }
 
-  get isAborted(): boolean {
+  private get isAborted(): boolean {
     return this.#abortController.signal.aborted;
   }
 
+  /**
+   * @internal Part of UnderlyingSource API
+   */
   async start(controller: ReadableStreamDefaultController<Uint8Array>) {
     this.#abortController.signal.addEventListener(
       "abort",
@@ -141,6 +144,9 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
     }
   }
 
+  /**
+   * @internal Part of UnderlyingSource API
+   */
   cancel(reason: Error): void {
     this.#abortController.abort(reason);
   }
