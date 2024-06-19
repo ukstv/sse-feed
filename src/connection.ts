@@ -70,6 +70,10 @@ function readOrWait(
 
 export class Connection extends TypedEventTarget<ConnectionEvents> {
   #abortController: AbortController;
+  // Apparently, controller.close is not idempotent
+  // Calling controller.close twice in a row leads to an error
+  // So we only call it if it has not been called previously
+  #isControllerClosed: boolean;
 
   constructor(
     readonly url: URL,
@@ -77,6 +81,7 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
   ) {
     super();
     this.#abortController = new AbortController();
+    this.#isControllerClosed = false;
   }
 
   stream(): ReadableStream<Uint8Array> {
@@ -91,7 +96,10 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
     this.#abortController.signal.addEventListener(
       "abort",
       () => {
-        controller.close();
+        if (!this.#isControllerClosed) {
+          controller.close();
+          this.#isControllerClosed = true;
+        }
       },
       { once: true },
     );
@@ -104,6 +112,13 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
       } catch (e) {
         this.dispatchEvent(new ErrorEvent(e as Error));
         continue;
+      }
+      if (response.status === 204) {
+        if (!this.#isControllerClosed) {
+          controller.close();
+          this.#isControllerClosed = true;
+        }
+        return;
       }
       const body = response.body;
       if (!body) {

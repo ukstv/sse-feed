@@ -67,6 +67,7 @@ test("single simple event", async () => {
   const eventStream = `data: YHOO
 data: +2
 data: 10
+
 `;
   const [received] = await receiveEvents(eventStream);
   assert.equal(received.length, 1);
@@ -80,6 +81,7 @@ data: This is the second message, it
 data: has two lines.
 
 data: This is the third message.
+
 `;
   const [received] = await receiveEvents(eventStream);
   assert.equal(received.length, 3);
@@ -100,6 +102,7 @@ data: 2153
 
 event: add
 data: 113411
+
 `;
   const [received] = await receiveEvents(eventStream);
   assert.equal(received.length, 3);
@@ -121,6 +124,7 @@ data:second event
 id
 
 data:  third event
+
 `;
   const [received] = await receiveEvents(eventStream);
   assert.equal(received.length, 3);
@@ -141,7 +145,9 @@ test("three events no trailing newline", async () => {
 data
 data
 
-data:`;
+data:
+
+`;
   const [received] = await receiveEvents(eventStream);
   assert.equal(received.length, 3);
   assert.equal(received[0], {
@@ -159,12 +165,14 @@ data:`;
     data: "",
     lastEventId: "",
   });
+
 });
 
 test("two identical events", async () => {
   const eventStream = `data:test
 
 data: test
+
 `;
   const [received] = await receiveEvents(eventStream);
   assert.equal(received.length, 2);
@@ -184,6 +192,7 @@ test("data contains colon", async () => {
   const eventStream = `data: It is 2024-06-16T09:13Z
 
 data
+
 `;
   const [received] = await receiveEvents(eventStream);
   assert.equal(received.length, 2);
@@ -202,6 +211,7 @@ data
 test("retry", async () => {
   const eventStream = `data: test
 retry: 30
+
 `;
   const [received, transformer] = await receiveEvents(eventStream);
   assert.equal(received.length, 1);
@@ -216,6 +226,7 @@ retry: 30
 test("retry: non-decimal", async () => {
   const eventStream = `data: test
 retry: 10FF
+
 `;
   const [received, transformer] = await receiveEvents(eventStream);
   assert.equal(received.length, 1);
@@ -230,6 +241,7 @@ retry: 10FF
 test("non-standard field", async () => {
   const eventStream = `data: test
 custom: field
+
 `;
   const [received, transformer] = await receiveEvents(eventStream);
   assert.equal(received.length, 1);

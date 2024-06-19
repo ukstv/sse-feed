@@ -48,7 +48,11 @@ export class SSEChunkTransformer implements Transformer<string, ServerSentEvent>
     controller: TransformStreamDefaultController<ServerSentEvent>,
     accumulator: Partial<ServerSentEvent> = {},
   ): void {
-    const [lineFound, fullLineLength] = grabLine(this.#buffer);
+    const grabbed = grabLine(this.#buffer);
+    if (!grabbed) {
+      return;
+    }
+    const [lineFound, fullLineLength] = grabbed;
     if (lineFound === "") {
       // dispatch the event
       let data = accumulator.data || "";
@@ -161,13 +165,13 @@ export class SSEChunkTransformer implements Transformer<string, ServerSentEvent>
   }
 }
 
-function grabLine(input: string): [string, number] {
+function grabLine(input: string): [string, number] | null {
   const lineRegexp = LINE_END_REGEXP.exec(input);
   if (lineRegexp) {
     const lineFound = input.substring(0, lineRegexp.index);
     const fullLineLength = lineFound.length + lineRegexp[0].length;
     return [lineFound, fullLineLength];
   } else {
-    return ["", 0];
+    return null;
   }
 }
