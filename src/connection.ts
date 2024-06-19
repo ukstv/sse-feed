@@ -57,6 +57,17 @@ class ErrorEvent extends TypedEvent<"error"> {
 
 type F = UnderlyingSource<Uint8Array>;
 
+function readOrWait(
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+): Promise<ReadableStreamReadResult<Uint8Array> | { done: false; value: null }> {
+  if (Boolean(controller.desiredSize)) {
+    return reader.read();
+  } else {
+    return Promise.resolve({ done: false, value: null });
+  }
+}
+
 export class Connection extends TypedEventTarget<ConnectionEvents> {
   #abortController: AbortController;
 
@@ -77,6 +88,13 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
   }
 
   async start(controller: ReadableStreamDefaultController<Uint8Array>) {
+    this.#abortController.signal.addEventListener(
+      "abort",
+      () => {
+        controller.close();
+      },
+      { once: true },
+    );
     while (!this.isAborted) {
       let response: Response;
       const connectionAbort = new AbortController();
@@ -98,7 +116,7 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
       try {
         let shallRead = true;
         while (!this.isAborted && shallRead) {
-          const next = await reader.read();
+          const next = await readOrWait(controller, reader);
           if (next.value) controller.enqueue(next.value);
           if (next.done) shallRead = false;
         }

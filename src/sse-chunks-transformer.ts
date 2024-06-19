@@ -27,6 +27,10 @@ export class SSEChunkTransformer implements Transformer<string, ServerSentEvent>
     this.#retry = undefined;
   }
 
+  static stream(): TransformStream<string, ServerSentEvent> {
+    return new TransformStream(new SSEChunkTransformer());
+  }
+
   get retry(): number | undefined {
     return this.#retry;
   }

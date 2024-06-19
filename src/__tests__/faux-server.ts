@@ -43,8 +43,7 @@ export class FauxServer {
         server.removeListener("error", onError);
         server.removeListener("listening", onListening);
       };
-      const onListening = (p: any) => {
-        console.log("listening on", p);
+      const onListening = () => {
         cleanup();
         resolve(server);
       };
@@ -58,7 +57,6 @@ export class FauxServer {
   }
 
   close(): Promise<void> {
-    console.log("close");
     return new Promise<void>((resolve, reject) => {
       if (!this.#server) {
         return resolve();
