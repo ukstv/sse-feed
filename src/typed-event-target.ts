@@ -1,6 +1,4 @@
-export type EventMap = {
-  [key: string]: Event;
-};
+export type EventMap = Record<string, Event>;
 
 type EventListenerOrEventListenerObject<K extends keyof E, E extends EventMap> =
   | EventListener<K, E>

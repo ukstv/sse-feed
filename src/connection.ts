@@ -68,6 +68,18 @@ function readOrWait(
   }
 }
 
+class ReconnectError extends Error {
+  constructor() {
+    super(`Reconnecting`);
+  }
+}
+
+function mergeAbortSignals(...signals: Array<AbortSignal>): AbortSignal {
+  // Part of baseline API, but TS does not know about it somehow
+  // @ts-expect-error
+  return AbortSignal.any(signals);
+}
+
 export class Connection extends TypedEventTarget<ConnectionEvents> {
   #abortController: AbortController;
   // Apparently, controller.close is not idempotent
@@ -110,7 +122,7 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
       let response: Response;
       const connectionAbort = new AbortController();
       try {
-        const signal = AbortSignal.any([connectionAbort.signal, this.#abortController.signal]);
+        const signal = mergeAbortSignals(connectionAbort.signal, this.#abortController.signal);
         response = await fetch(this.url, { ...this.init, signal: signal });
       } catch (e) {
         this.dispatchEvent(new ErrorEvent(e as Error));
@@ -131,6 +143,7 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
         continue;
       }
       const reader = body.getReader();
+      this.dispatchEvent(new OpenEvent());
       try {
         let shallRead = true;
         while (!this.isAborted && shallRead) {
@@ -141,6 +154,7 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
       } catch (e) {
         this.dispatchEvent(new ErrorEvent(e as Error));
       }
+      this.dispatchEvent(new ErrorEvent(new ReconnectError()));
     }
   }
 
