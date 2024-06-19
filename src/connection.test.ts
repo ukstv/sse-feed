@@ -48,7 +48,7 @@ test("get stream", () => {
   return FauxServer.with(makeApp(), async (url) => {
     const connection = new Connection(new URL("/feed", url), {});
     const openEvents = eventCounts(connection, "open");
-    const errorEvents = eventCounts(connection, "error");
+    const closeEvents = eventCounts(connection, "close");
     const stream = sseStream(connection);
     const reader = stream.getReader();
     const a = await reader.read();
@@ -57,7 +57,7 @@ test("get stream", () => {
     assert.equal(b, { done: false, value: { type: "time-update", data: "1", lastEventId: "1" } });
     connection.close();
     assert.equal(openEvents.size, 1);
-    assert.equal(errorEvents.size, 0);
+    assert.equal(closeEvents.size, 0);
   });
 });
 
@@ -93,7 +93,7 @@ test("follow redirect", async () => {
       redirect: "follow",
     });
     const openEvents = eventCounts(connection, "open");
-    const errorEvents = eventCounts(connection, "error");
+    const closeEvents = eventCounts(connection, "close");
     const stream = sseStream(connection);
     const reader = stream.getReader();
     const a = await reader.read();
@@ -102,7 +102,7 @@ test("follow redirect", async () => {
     assert.equal(b, { done: false, value: { type: "time-update", data: "1", lastEventId: "1" } });
     connection.close();
     assert.equal(openEvents.size, 1);
-    assert.equal(errorEvents.size, 0);
+    assert.equal(closeEvents.size, 0);
   });
 });
 
@@ -122,27 +122,27 @@ test("reconnect if connection is closed by server", async () => {
   await FauxServer.with(app, async (url) => {
     const connection = new Connection(new URL("/feed", url), {});
     const openEvents = eventCounts(connection, "open");
-    const errorEvents = eventCounts(connection, "error");
+    const closeEvents = eventCounts(connection, "close");
     const stream = connection.stream();
     const reader = stream.getReader();
     assert.equal(openEvents.size, 0);
-    assert.equal(errorEvents.size, 0);
+    assert.equal(closeEvents.size, 0);
     await reader.read();
     assert.equal(connectionCount, 1);
     assert.equal(openEvents.size, 1);
-    assert.equal(errorEvents.size, 0);
+    assert.equal(closeEvents.size, 0);
     await reader.read();
     assert.equal(connectionCount, 2);
     assert.equal(openEvents.size, 2);
-    assert.equal(errorEvents.size, 1);
+    assert.equal(closeEvents.size, 1);
     await reader.read();
     assert.equal(connectionCount, 3);
     assert.equal(openEvents.size, 3);
-    assert.equal(errorEvents.size, 2);
+    assert.equal(closeEvents.size, 2);
     connection.close();
     assert.equal(connectionCount, 3);
     assert.equal(openEvents.size, 3);
-    assert.equal(errorEvents.size, 2);
+    assert.equal(closeEvents.size, 2);
   });
 });
 
@@ -168,7 +168,7 @@ test("no reconnect on 204 no content", async () => {
       redirect: "follow",
     });
     const openEvents = eventCounts(connection, "open");
-    const errorEvents = eventCounts(connection, "error");
+    const closeEvents = eventCounts(connection, "close");
     const stream = sseStream(connection);
     const reader = stream.getReader();
     // Read MAX_CONNECTIONS_TILL_NO_CONTENT values
@@ -179,25 +179,25 @@ test("no reconnect on 204 no content", async () => {
       assert.equal(connectionCount, i + 1);
     }
     assert.equal(openEvents.size, 3);
-    assert.equal(errorEvents.size, 2);
+    assert.equal(closeEvents.size, 2);
     // And now we get 204 no content
     const read4 = await reader.read();
     assert.equal(openEvents.size, 3);
-    assert.equal(errorEvents.size, 3);
+    assert.equal(closeEvents.size, 3);
     assert.equal(read4.done, true);
     assert.not.ok(read4.value);
     assert.equal(connectionCount, 4);
     // Just report "done"
     const read5 = await reader.read();
     assert.equal(openEvents.size, 3);
-    assert.equal(errorEvents.size, 3);
+    assert.equal(closeEvents.size, 3);
     assert.equal(read5.done, true);
     assert.not.ok(read5.value);
     // And do not reconnect
     assert.equal(connectionCount, 4);
     connection.close();
     assert.equal(openEvents.size, 3);
-    assert.equal(errorEvents.size, 3);
+    assert.equal(closeEvents.size, 3);
   });
 });
 

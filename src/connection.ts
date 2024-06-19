@@ -1,61 +1,30 @@
 import { TypedEvent, TypedEventTarget } from "./typed-event-target.js";
 
-export type ConnectionOpts = Partial<RequestInit> & Partial<{ withCredentials: boolean }>;
+export type ConnectionEvents = {
+  open: OpenEvent;
+  connecting: ConnectingEvent;
+  close: CloseEvent;
+};
 
-const DEFAULT_FETCH_OPTIONS = {
-  redirect: "follow",
-  method: "GET",
-  cache: "no-store",
-  headers: {
-    Accept: "text/event-stream",
-  },
-} satisfies RequestInit;
-
-function fetchOptions(opts: ConnectionOpts): RequestInit {
-  const { withCredentials, ...options } = opts;
-  if (withCredentials) {
-    return {
-      mode: "cors",
-      credentials: "include",
-      ...DEFAULT_FETCH_OPTIONS,
-      ...options,
-    };
-  } else {
-    return {
-      mode: "cors",
-      credentials: "same-origin",
-      ...DEFAULT_FETCH_OPTIONS,
-      ...options,
-    };
+class CloseEvent extends TypedEvent<"close"> {
+  readonly cause: Error | undefined;
+  constructor(cause?: Error) {
+    super("close");
+    this.cause = cause;
   }
 }
 
-export enum ReadyState {
-  CONNECTING = 0,
-  OPEN = 1,
-  CLOSED = 2,
+class ConnectingEvent extends TypedEvent<"connecting"> {
+  constructor() {
+    super("connecting");
+  }
 }
-
-export type ConnectionEvents = {
-  open: OpenEvent;
-  error: ErrorEvent;
-};
 
 class OpenEvent extends TypedEvent<"open"> {
   constructor() {
     super("open");
   }
 }
-
-class ErrorEvent extends TypedEvent<"error"> {
-  readonly error: Error;
-  constructor(error: Error) {
-    super("error");
-    this.error = error;
-  }
-}
-
-type F = UnderlyingSource<Uint8Array>;
 
 function readOrWait(
   controller: ReadableStreamDefaultController<Uint8Array>,
@@ -65,12 +34,6 @@ function readOrWait(
     return reader.read();
   } else {
     return Promise.resolve({ done: false, value: null });
-  }
-}
-
-class ReconnectError extends Error {
-  constructor() {
-    super(`Reconnecting`);
   }
 }
 
@@ -119,13 +82,14 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
       { once: true },
     );
     while (!this.isAborted) {
+      this.dispatchEvent(new ConnectingEvent());
       let response: Response;
       const connectionAbort = new AbortController();
       try {
         const signal = mergeAbortSignals(connectionAbort.signal, this.#abortController.signal);
         response = await fetch(this.url, { ...this.init, signal: signal });
       } catch (e) {
-        this.dispatchEvent(new ErrorEvent(e as Error));
+        this.dispatchEvent(new CloseEvent(e as Error));
         continue;
       }
       if (response.status === 204) {
@@ -139,7 +103,7 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
       if (!body) {
         const error = new Error(`Empty body received`);
         connectionAbort.abort(error);
-        this.dispatchEvent(new ErrorEvent(error));
+        this.dispatchEvent(new CloseEvent(error));
         continue;
       }
       const reader = body.getReader();
@@ -152,9 +116,11 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
           if (next.done) shallRead = false;
         }
       } catch (e) {
-        this.dispatchEvent(new ErrorEvent(e as Error));
+        connectionAbort.abort(e);
+        this.dispatchEvent(new CloseEvent(e as Error));
+        continue;
       }
-      this.dispatchEvent(new ErrorEvent(new ReconnectError()));
+      this.dispatchEvent(new CloseEvent());
     }
   }
 
@@ -167,19 +133,6 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
 
   close() {
     this.#abortController.abort("ABORT");
-  }
-}
-
-export class EventSource extends TypedEventTarget<ConnectionEvents> {
-  readonly #url: URL;
-
-  constructor(endpoint: string | URL, opts: ConnectionOpts = {}) {
-    super();
-    this.#url = new URL(endpoint, globalThis.origin);
-  }
-
-  get url(): string {
-    return this.#url.href;
   }
 }
 
