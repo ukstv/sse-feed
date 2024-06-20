@@ -6,7 +6,7 @@ export type ConnectionEvents = {
   close: CloseEvent;
 };
 
-class CloseEvent extends TypedEvent<"close"> {
+export class CloseEvent extends TypedEvent<"close"> {
   readonly cause: Error | undefined;
   constructor(cause?: Error) {
     super("close");
@@ -14,13 +14,13 @@ class CloseEvent extends TypedEvent<"close"> {
   }
 }
 
-class ConnectingEvent extends TypedEvent<"connecting"> {
+export class ConnectingEvent extends TypedEvent<"connecting"> {
   constructor() {
     super("connecting");
   }
 }
 
-class OpenEvent extends TypedEvent<"open"> {
+export class OpenEvent extends TypedEvent<"open"> {
   constructor() {
     super("open");
   }
@@ -30,7 +30,7 @@ function readOrWait(
   controller: ReadableStreamDefaultController<Uint8Array>,
   reader: ReadableStreamDefaultReader<Uint8Array>,
 ): Promise<ReadableStreamReadResult<Uint8Array> | { done: false; value: null }> {
-  if (Boolean(controller.desiredSize)) {
+  if (controller.desiredSize && controller.desiredSize > 0) {
     return reader.read();
   } else {
     return Promise.resolve({ done: false, value: null });
@@ -44,17 +44,21 @@ function mergeAbortSignals(...signals: Array<AbortSignal>): AbortSignal {
 }
 
 export class Connection extends TypedEventTarget<ConnectionEvents> {
-  #abortController: AbortController;
+  readonly #url: URL;
+  readonly #abortController: AbortController;
+  readonly #init: RequestInit;
+  readonly #fetch: typeof fetch;
+
   // Apparently, controller.close is not idempotent
   // Calling controller.close twice in a row leads to an error
   // So we only call it if it has not been called previously
   #isControllerClosed: boolean;
 
-  constructor(
-    readonly url: URL,
-    readonly init: RequestInit,
-  ) {
+  constructor(url: URL, init: RequestInit, fetchFn: typeof fetch = fetch) {
     super();
+    this.#url = url;
+    this.#init = init;
+    this.#fetch = fetchFn;
     this.#abortController = new AbortController();
     this.#isControllerClosed = false;
   }
@@ -87,7 +91,7 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
       const connectionAbort = new AbortController();
       try {
         const signal = mergeAbortSignals(connectionAbort.signal, this.#abortController.signal);
-        response = await fetch(this.url, { ...this.init, signal: signal });
+        response = await this.#fetch(this.#url, { ...this.#init, signal: signal });
       } catch (e) {
         this.dispatchEvent(new CloseEvent(e as Error));
         continue;
@@ -135,44 +139,3 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
     this.#abortController.abort("ABORT");
   }
 }
-
-// export class Connection extends TypedEventTarget<ConnectionEvents> {
-//   readonly url: string;
-//   readonly withCredentials: boolean;
-//
-//   #readyState: ReadyState;
-//   #responseP: Promise<Response>;
-//
-//   readonly #abortController: AbortController;
-//
-//   constructor(endpoint: string | URL, opts: ConnectionOpts = {}) {
-//     super();
-//     const url = new URL(endpoint, globalThis.origin);
-//     this.url = url.href;
-//     this.withCredentials = opts.withCredentials ?? false;
-//     this.#readyState = ReadyState.CONNECTING;
-//     this.#abortController = new AbortController();
-//     this.#responseP = fetch(this.url, fetchOptions({ ...opts, signal: this.#abortController.signal }))
-//       .then((response) => {
-//         this.#readyState = ReadyState.OPEN;
-//         this.dispatchEvent(new OpenEvent());
-//         // return response.body;
-//         return response;
-//       })
-//       .catch((e) => {
-//         console.log("catch.1", e);
-//         this.#readyState = ReadyState.CLOSED;
-//         this.dispatchEvent(new ErrorEvent(e));
-//         throw e;
-//       });
-//   }
-//
-//   get readyState(): ReadyState {
-//     return this.#readyState;
-//   }
-//
-//   close() {
-//     this.#readyState = ReadyState.CLOSED;
-//     this.#abortController.abort();
-//   }
-// }

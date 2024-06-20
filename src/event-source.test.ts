@@ -1,0 +1,3 @@
+// get stream
+// follow redirect
+
