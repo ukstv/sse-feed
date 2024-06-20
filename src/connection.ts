@@ -43,11 +43,12 @@ function mergeAbortSignals(...signals: Array<AbortSignal>): AbortSignal {
   return AbortSignal.any(signals);
 }
 
-export class Connection extends TypedEventTarget<ConnectionEvents> {
+export class Connection {
   readonly #url: URL;
   readonly #abortController: AbortController;
   readonly #init: RequestInit;
   readonly #fetch: typeof fetch;
+  readonly #events: TypedEventTarget<ConnectionEvents>;
 
   // Apparently, controller.close is not idempotent
   // Calling controller.close twice in a row leads to an error
@@ -55,12 +56,16 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
   #isControllerClosed: boolean;
 
   constructor(url: URL, init: RequestInit, fetchFn: typeof fetch = fetch) {
-    super();
     this.#url = url;
     this.#init = init;
     this.#fetch = fetchFn;
     this.#abortController = new AbortController();
     this.#isControllerClosed = false;
+    this.#events = new TypedEventTarget<ConnectionEvents>();
+  }
+
+  get events() {
+    return this.#events;
   }
 
   stream(): ReadableStream<Uint8Array> {
@@ -86,14 +91,14 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
       { once: true },
     );
     while (!this.isAborted) {
-      this.dispatchEvent(new ConnectingEvent());
+      this.#events.dispatchEvent(new ConnectingEvent());
       let response: Response;
       const connectionAbort = new AbortController();
       try {
         const signal = mergeAbortSignals(connectionAbort.signal, this.#abortController.signal);
         response = await this.#fetch(this.#url, { ...this.#init, signal: signal });
       } catch (e) {
-        this.dispatchEvent(new CloseEvent(e as Error));
+        this.#events.dispatchEvent(new CloseEvent(e as Error));
         continue;
       }
       if (response.status === 204) {
@@ -107,11 +112,11 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
       if (!body) {
         const error = new Error(`Empty body received`);
         connectionAbort.abort(error);
-        this.dispatchEvent(new CloseEvent(error));
+        this.#events.dispatchEvent(new CloseEvent(error));
         continue;
       }
       const reader = body.getReader();
-      this.dispatchEvent(new OpenEvent());
+      this.#events.dispatchEvent(new OpenEvent());
       try {
         let shallRead = true;
         while (!this.isAborted && shallRead) {
@@ -121,10 +126,10 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
         }
       } catch (e) {
         connectionAbort.abort(e);
-        this.dispatchEvent(new CloseEvent(e as Error));
+        this.#events.dispatchEvent(new CloseEvent(e as Error));
         continue;
       }
-      this.dispatchEvent(new CloseEvent());
+      this.#events.dispatchEvent(new CloseEvent());
     }
   }
 

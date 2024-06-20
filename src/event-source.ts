@@ -74,9 +74,11 @@ export class EventSource extends TypedEventTarget<EventSourceEvents> implements 
     this.handleConnectingEvent = this.handleConnectingEvent.bind(this);
 
     this.#connection = new Connection(this.#url, fetchOptions(opts), fetchFn);
-    this.#connection.addEventListener("open", this.handleOpenEvent);
-    this.#connection.addEventListener("connecting", this.handleConnectingEvent);
-    this.#connection.addEventListener("close", this.handleCloseEvent);
+    this.#connection.events.addEventListener("open", function () {
+      console.log("Connection opened", this);
+    });
+    this.#connection.events.addEventListener("connecting", this.handleConnectingEvent);
+    this.#connection.events.addEventListener("close", this.handleCloseEvent);
     this.#stream = this.#connection
       .stream()
       .pipeThrough(BytesToStringTransformer.stream())
@@ -114,15 +116,17 @@ export class EventSource extends TypedEventTarget<EventSourceEvents> implements 
   }
 
   private handleOpenEvent(evt: OpenEvent): void {
+    console.trace("open");
+    console.log("this.open", this);
     this.#readyState = ReadyState.OPEN;
     this.dispatchEvent(evt);
   }
 
   close() {
     this.#connection.close();
-    this.#connection.removeEventListener("open", this.handleOpenEvent);
-    this.#connection.removeEventListener("connecting", this.handleConnectingEvent);
-    this.#connection.removeEventListener("close", this.handleCloseEvent);
+    this.#connection.events.removeEventListener("open", this.handleOpenEvent);
+    this.#connection.events.removeEventListener("connecting", this.handleConnectingEvent);
+    this.#connection.events.removeEventListener("close", this.handleCloseEvent);
     this.#readyState = ReadyState.CLOSED;
   }
 }

@@ -7,54 +7,24 @@ import { Connection } from "./connection.js";
 import { BytesToStringTransformer } from "./bytes-to-string-transformer.js";
 import { SSEChunkTransformer } from "./sse-chunks-transformer.js";
 import type { ServerSentEvent } from "./server-sent-event.type.js";
-import { EventMap, TypedEventTarget } from "./typed-event-target.js";
-
-function makeApp(): Hono {
-  let id = 0;
-  return new Hono().get("/feed", (c) =>
-    streamSSE(c, async (stream) => {
-      let canContinue = true;
-      stream.onAbort(() => {
-        canContinue = false;
-      });
-      while (canContinue) {
-        await stream.writeSSE({
-          data: String(id),
-          event: "time-update",
-          id: String(id++),
-        });
-      }
-    }),
-  );
-}
+import { makeApp } from "./__tests__/make-app.js";
+import { eventCounts } from "./__tests__/eevnt-counts.js";
 
 function sseStream(connection: Connection): ReadableStream<ServerSentEvent> {
   return connection.stream().pipeThrough(BytesToStringTransformer.stream()).pipeThrough(SSEChunkTransformer.stream());
 }
 
-function eventCounts<EV extends EventMap>(target: TypedEventTarget<EV>, kind: keyof EV) {
-  let events: Array<keyof EV> = [];
-  target.addEventListener(kind, (event) => {
-    events.push(event as any);
-  });
-  return {
-    get size(): number {
-      return events.length;
-    },
-  };
-}
-
 test("get stream", () => {
   return FauxServer.with(makeApp(), async (url) => {
     const connection = new Connection(new URL("/feed", url), {});
-    const openEvents = eventCounts(connection, "open");
-    const closeEvents = eventCounts(connection, "close");
+    const openEvents = eventCounts(connection.events, "open");
+    const closeEvents = eventCounts(connection.events, "close");
     const stream = sseStream(connection);
     const reader = stream.getReader();
-    const a = await reader.read();
-    const b = await reader.read();
-    assert.equal(a, { done: false, value: { type: "time-update", data: "0", lastEventId: "0" } });
-    assert.equal(b, { done: false, value: { type: "time-update", data: "1", lastEventId: "1" } });
+    const read1 = await reader.read();
+    assert.equal(read1, { done: false, value: { type: "time-update", data: "0", lastEventId: "0" } });
+    const read2 = await reader.read();
+    assert.equal(read2, { done: false, value: { type: "time-update", data: "1", lastEventId: "1" } });
     connection.close();
     assert.equal(openEvents.size, 1);
     assert.equal(closeEvents.size, 0);
@@ -92,8 +62,8 @@ test("follow redirect", async () => {
     const connection = new Connection(new URL("/redirect-302-a", url), {
       redirect: "follow",
     });
-    const openEvents = eventCounts(connection, "open");
-    const closeEvents = eventCounts(connection, "close");
+    const openEvents = eventCounts(connection.events, "open");
+    const closeEvents = eventCounts(connection.events, "close");
     const stream = sseStream(connection);
     const reader = stream.getReader();
     const a = await reader.read();
@@ -121,8 +91,8 @@ test("reconnect if connection is closed by server", async () => {
   );
   await FauxServer.with(app, async (url) => {
     const connection = new Connection(new URL("/feed", url), {});
-    const openEvents = eventCounts(connection, "open");
-    const closeEvents = eventCounts(connection, "close");
+    const openEvents = eventCounts(connection.events, "open");
+    const closeEvents = eventCounts(connection.events, "close");
     const stream = connection.stream();
     const reader = stream.getReader();
     assert.equal(openEvents.size, 0);
@@ -167,8 +137,8 @@ test("no reconnect on 204 no content", async () => {
     const connection = new Connection(new URL("/feed", url), {
       redirect: "follow",
     });
-    const openEvents = eventCounts(connection, "open");
-    const closeEvents = eventCounts(connection, "close");
+    const openEvents = eventCounts(connection.events, "open");
+    const closeEvents = eventCounts(connection.events, "close");
     const stream = sseStream(connection);
     const reader = stream.getReader();
     // Read MAX_CONNECTIONS_TILL_NO_CONTENT values
