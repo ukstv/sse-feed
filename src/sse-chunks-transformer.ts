@@ -24,6 +24,10 @@ export class SetRetryEvent extends TypedEvent<"setRetry"> {
     super("setRetry");
     this.value = value;
   }
+
+  [Symbol.for("nodejs.util.inspect.custom")]() {
+    return `SetRetryEvent(${this.value})`;
+  }
 }
 
 export type SSEChunkTransformerEvents = {
@@ -35,20 +39,14 @@ export class SSEChunkTransformer
   implements Transformer<string, ServerSentEvent>
 {
   #buffer: string;
-  #retry: number | undefined;
 
   constructor() {
     super();
     this.#buffer = "";
-    this.#retry = undefined;
   }
 
   static stream(): TransformStream<string, ServerSentEvent> {
     return new TransformStream(new SSEChunkTransformer());
-  }
-
-  get retry(): number | undefined {
-    return this.#retry;
   }
 
   transform(chunk: string, controller: TransformStreamDefaultController<ServerSentEvent>): void {
@@ -166,7 +164,6 @@ export class SSEChunkTransformer
         const decimal = parseInt(value, 10);
         if (decimal.toString() === value) {
           // valid decimal
-          this.#retry = decimal;
           this.dispatchEvent(new SetRetryEvent(decimal));
           return accumulator;
         } else {

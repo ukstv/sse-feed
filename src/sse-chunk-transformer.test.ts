@@ -226,7 +226,6 @@ retry: 30
     data: "test",
     lastEventId: "",
   });
-  assert.equal(transformer.retry, 30);
   assert.equal(retry, 30);
 });
 
@@ -235,14 +234,19 @@ test("retry: non-decimal", async () => {
 retry: 10FF
 
 `;
-  const [received, transformer] = await receiveEvents(eventStream);
+  const transformer = new SSEChunkTransformer();
+  let retry: number | undefined = undefined;
+  transformer.addEventListener("setRetry", (evt) => {
+    retry = evt.value;
+  });
+  const [received] = await receiveEvents(eventStream, transformer);
   assert.equal(received.length, 1);
   assert.equal(received[0], {
     type: "message",
     data: "test",
     lastEventId: "",
   });
-  assert.equal(transformer.retry, undefined);
+  assert.equal(retry, undefined);
 });
 
 test("non-standard field", async () => {

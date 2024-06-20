@@ -1,5 +1,5 @@
 import { TypedEvent, TypedEventTarget } from "./typed-event-target.js";
-import { ConnectingEvent, Connection, ConnectionEvents, OpenEvent, CloseEvent } from "./connection.js";
+import { ConnectingEvent, Connection, OpenEvent, CloseEvent } from "./connection.js";
 import { BytesToStringTransformer } from "./bytes-to-string-transformer.js";
 import { SSEChunkTransformer } from "./sse-chunks-transformer.js";
 import { ServerSentEvent } from "./server-sent-event.type.js";
@@ -57,6 +57,7 @@ export type EventSourceEvents = {
 export class EventSource extends TypedEventTarget<EventSourceEvents> {
   readonly #url: URL;
   readonly #connection: Connection;
+  readonly #sseChunkTransformer: SSEChunkTransformer;
 
   #stream: ReadableStream<ServerSentEvent> | undefined;
   #readyState: ReadyState;
@@ -73,6 +74,10 @@ export class EventSource extends TypedEventTarget<EventSourceEvents> {
     this.#connection.addEventListener("open", this.handleOpenEvent);
     this.#connection.addEventListener("connecting", this.handleConnectingEvent);
     this.#connection.addEventListener("close", this.handleCloseEvent);
+    this.#sseChunkTransformer = new SSEChunkTransformer();
+    this.#sseChunkTransformer.addEventListener("setRetry", (evt) => {
+      this.#connection.retry = evt.value;
+    });
     this.#stream = undefined;
   }
 
@@ -94,7 +99,7 @@ export class EventSource extends TypedEventTarget<EventSourceEvents> {
     } else {
       this.#stream = new ReadableStream(this.#connection)
         .pipeThrough(BytesToStringTransformer.stream())
-        .pipeThrough(SSEChunkTransformer.stream());
+        .pipeThrough(new TransformStream(this.#sseChunkTransformer));
       return this.#stream;
     }
   }

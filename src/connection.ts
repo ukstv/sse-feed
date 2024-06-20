@@ -47,11 +47,12 @@ function mergeAbortSignals(...signals: Array<AbortSignal>): AbortSignal {
 export class Connection extends TypedEventTarget<ConnectionEvents> {
   readonly #url: URL;
   readonly #abortController: AbortController;
-  readonly #init: RequestInit;
   readonly #fetch: typeof fetch;
 
   #stream: ReadableStream<Uint8Array> | undefined;
-  #retry: number;
+
+  init: RequestInit;
+  retry: number;
 
   // Apparently, controller.close is not idempotent
   // Calling controller.close twice in a row leads to an error
@@ -61,20 +62,12 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
   constructor(url: URL, init: RequestInit, fetchFn: typeof fetch = fetch) {
     super();
     this.#url = url;
-    this.#init = init;
     this.#fetch = fetchFn;
     this.#abortController = new AbortController();
     this.#isControllerClosed = false;
     this.#stream = undefined;
-    this.#retry = 0;
-  }
-
-  get retry(): number {
-    return this.#retry;
-  }
-
-  set retry(value: number) {
-    this.#retry = value;
+    this.init = init;
+    this.retry = 0;
   }
 
   stream(): ReadableStream<Uint8Array> {
@@ -110,7 +103,7 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
       const connectionAbort = new AbortController();
       try {
         const signal = mergeAbortSignals(connectionAbort.signal, this.#abortController.signal);
-        response = await this.#fetch(this.#url, { ...this.#init, signal: signal });
+        response = await this.#fetch(this.#url, { ...this.init, signal: signal });
       } catch (e) {
         this.dispatchEvent(new CloseEvent(e as Error));
         continue;
@@ -144,7 +137,12 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
         continue;
       }
       this.dispatchEvent(new CloseEvent());
+      await this.waitRetry(this.retry);
     }
+  }
+
+  async waitRetry(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**

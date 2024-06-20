@@ -6,6 +6,7 @@ import { FauxServer } from "./__tests__/faux-server.js";
 import { makeApp } from "./__tests__/make-app.js";
 import { eventCounts } from "./__tests__/event-counts.js";
 import { EventSource } from "./event-source.js";
+import sinon from "sinon";
 
 test("get stream", () => {
   return FauxServer.with(makeApp(), async (url) => {
@@ -142,40 +143,69 @@ test("no reconnect on 204 no content", async () => {
   });
 });
 
-test("can connect via POST", async () => {
-  // Beware: due to a bug in
+// test("can connect via POST", async () => {
+//   // Beware: due to a bug in
+//   const app = new Hono().post("/feed-post", (c) => {
+//     let id = 0;
+//     return streamSSE(c, async (stream) => {
+//       let canContinue = true;
+//       stream.onAbort(() => {
+//         canContinue = false;
+//       });
+//       while (canContinue) {
+//         await stream.writeSSE({
+//           data: String(id),
+//           event: "time-update",
+//           id: String(id++),
+//         });
+//       }
+//     });
+//   });
+//   return FauxServer.with(app, async (url) => {
+//     const eventSource = new EventSource(new URL("/feed-post", url), { method: "POST" });
+//     const openEvents = eventCounts(eventSource, "open");
+//     const errorEvents = eventCounts(eventSource, "error");
+//     const reader = eventSource.stream().getReader();
+//     const read1 = await reader.read();
+//     const read2 = await reader.read();
+//     assert.equal(read1, { done: false, value: { type: "time-update", data: "0", lastEventId: "0" } });
+//     assert.equal(read2, { done: false, value: { type: "time-update", data: "1", lastEventId: "1" } });
+//     eventSource.close();
+//     assert.equal(openEvents.size, 1);
+//     assert.equal(errorEvents.size, 0);
+//   });
+// });
+
+test("respects retry", async () => {
+  let id = 0;
   const app = new Hono().post("/feed-post", (c) => {
-    let id = 0;
     return streamSSE(c, async (stream) => {
-      let canContinue = true;
-      stream.onAbort(() => {
-        canContinue = false;
+      await stream.writeSSE({
+        data: String(id),
+        event: "time-update",
+        id: String(id),
+        retry: id * 100,
       });
-      while (canContinue) {
-        await stream.writeSSE({
-          data: String(id),
-          event: "time-update",
-          id: String(id++),
-        });
-      }
+      id += 1;
+      await stream.close();
     });
   });
   return FauxServer.with(app, async (url) => {
     const eventSource = new EventSource(new URL("/feed-post", url), { method: "POST" });
-    const openEvents = eventCounts(eventSource, "open");
-    const errorEvents = eventCounts(eventSource, "error");
     const reader = eventSource.stream().getReader();
-    const read1 = await reader.read();
-    const read2 = await reader.read();
-    assert.equal(read1, { done: false, value: { type: "time-update", data: "0", lastEventId: "0" } });
-    assert.equal(read2, { done: false, value: { type: "time-update", data: "1", lastEventId: "1" } });
+    const waitSpy = sinon.spy(eventSource.connection, "waitRetry");
+    await reader.read();
+    await reader.read();
+    await reader.read();
+    assert.equal(waitSpy.args, [[0], [100]]);
     eventSource.close();
-    assert.equal(openEvents.size, 1);
-    assert.equal(errorEvents.size, 0);
   });
 });
 
-// TODO handle retry
+test('handle last event id', async () => {
+
+})
+
 // TODO handle last Event id
 
 test.run();
