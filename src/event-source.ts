@@ -75,12 +75,11 @@ export class EventSource extends TypedEventTarget<EventSourceEvents> implements 
 
     this.#connection = new Connection(this.#url, fetchOptions(opts), fetchFn);
     this.#connection.events.addEventListener("open", function () {
-      console.log("Connection opened", this);
+      // console.log("Connection opened", this);
     });
     this.#connection.events.addEventListener("connecting", this.handleConnectingEvent);
     this.#connection.events.addEventListener("close", this.handleCloseEvent);
-    this.#stream = this.#connection
-      .stream()
+    this.#stream = new ReadableStream(this.#connection)
       .pipeThrough(BytesToStringTransformer.stream())
       .pipeThrough(SSEChunkTransformer.stream());
     this.cancel = this.#stream.cancel.bind(this.#stream);

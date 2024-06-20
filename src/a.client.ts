@@ -18,12 +18,11 @@ const writableConsole = new WritableStream<Uint8Array>({
 });
 const abortController = new AbortController();
 setTimeout(() => {
-  abortController.abort(new Error('ABORT'))
-}, 2000)
+  abortController.abort(new Error("ABORT"));
+}, 2000);
 try {
-  await c.stream().pipeTo(writableConsole, {signal: abortController.signal});
+  await new ReadableStream(c).pipeTo(writableConsole, { signal: abortController.signal });
 } catch (error) {
-  console.log('done-error');
+  console.log("done-error");
   console.log(error);
 }
-

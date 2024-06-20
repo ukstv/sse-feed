@@ -11,7 +11,9 @@ import { makeApp } from "./__tests__/make-app.js";
 import { eventCounts } from "./__tests__/eevnt-counts.js";
 
 function sseStream(connection: Connection): ReadableStream<ServerSentEvent> {
-  return connection.stream().pipeThrough(BytesToStringTransformer.stream()).pipeThrough(SSEChunkTransformer.stream());
+  return new ReadableStream(connection)
+    .pipeThrough(BytesToStringTransformer.stream())
+    .pipeThrough(SSEChunkTransformer.stream());
 }
 
 test("get stream", () => {
@@ -93,7 +95,7 @@ test("reconnect if connection is closed by server", async () => {
     const connection = new Connection(new URL("/feed", url), {});
     const openEvents = eventCounts(connection.events, "open");
     const closeEvents = eventCounts(connection.events, "close");
-    const stream = connection.stream();
+    const stream = new ReadableStream(connection);
     const reader = stream.getReader();
     assert.equal(openEvents.size, 0);
     assert.equal(closeEvents.size, 0);

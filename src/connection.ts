@@ -68,10 +68,6 @@ export class Connection {
     return this.#events;
   }
 
-  stream(): ReadableStream<Uint8Array> {
-    return new ReadableStream(this);
-  }
-
   private get isAborted(): boolean {
     return this.#abortController.signal.aborted;
   }
