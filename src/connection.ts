@@ -1,5 +1,5 @@
 import { TypedEvent, TypedEventTarget } from "./typed-event-target.js";
-import { ServerSentEvent } from "./server-sent-event.type.js";
+import { StreamAlreadyCreatedError } from "./stream-already-created-error.js";
 
 export type ConnectionEvents = {
   open: OpenEvent;
@@ -42,12 +42,6 @@ function mergeAbortSignals(...signals: Array<AbortSignal>): AbortSignal {
   // Part of baseline API, but TS does not know about it somehow
   // @ts-expect-error
   return AbortSignal.any(signals);
-}
-
-export class StreamAlreadyCreatedError extends Error {
-  constructor(name: string) {
-    super(`Stream of ${name} already created`);
-  }
 }
 
 export class Connection extends TypedEventTarget<ConnectionEvents> {

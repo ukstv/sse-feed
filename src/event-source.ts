@@ -3,6 +3,7 @@ import { ConnectingEvent, Connection, ConnectionEvents, OpenEvent, CloseEvent } 
 import { BytesToStringTransformer } from "./bytes-to-string-transformer.js";
 import { SSEChunkTransformer } from "./sse-chunks-transformer.js";
 import { ServerSentEvent } from "./server-sent-event.type.js";
+import { StreamAlreadyCreatedError } from "./stream-already-created-error.js";
 
 export enum ReadyState {
   CONNECTING = 0,
@@ -41,33 +42,27 @@ function fetchOptions(opts: ConnectionOpts): RequestInit {
 }
 
 export class ErrorEvent extends TypedEvent<"error"> {
-  readonly error: Error;
-  constructor(error: Error) {
+  readonly cause?: Error;
+  constructor(error?: Error) {
     super("error");
-    this.error = error;
+    this.cause = error;
   }
 }
 
-export type EventSourceEvents = ConnectionEvents & {
+export type EventSourceEvents = {
+  open: OpenEvent;
   error: ErrorEvent;
 };
 
-export class EventSource implements ReadableStream<ServerSentEvent> {
+export class EventSource extends TypedEventTarget<EventSourceEvents> {
   readonly #url: URL;
   readonly #connection: Connection;
-  readonly #stream: ReadableStream<ServerSentEvent>;
-  readonly #events: TypedEventTarget<EventSourceEvents>;
 
+  #stream: ReadableStream<ServerSentEvent> | undefined;
   #readyState: ReadyState;
 
-  readonly cancel: ReadableStream<ServerSentEvent>["cancel"];
-  readonly getReader: ReadableStream<ServerSentEvent>["getReader"];
-  readonly pipeThrough: ReadableStream<ServerSentEvent>["pipeThrough"];
-  readonly pipeTo: ReadableStream<ServerSentEvent>["pipeTo"];
-  readonly tee: ReadableStream<ServerSentEvent>["tee"];
-
   constructor(endpoint: string | URL, opts: ConnectionOpts = {}, fetchFn: typeof fetch = fetch) {
-    this.#events = new TypedEventTarget();
+    super();
     this.#url = new URL(endpoint, globalThis.origin);
     this.#readyState = ReadyState.CONNECTING;
     this.handleOpenEvent = this.handleOpenEvent.bind(this);
@@ -78,22 +73,11 @@ export class EventSource implements ReadableStream<ServerSentEvent> {
     this.#connection.addEventListener("open", this.handleOpenEvent);
     this.#connection.addEventListener("connecting", this.handleConnectingEvent);
     this.#connection.addEventListener("close", this.handleCloseEvent);
-    this.#stream = new ReadableStream(this.#connection)
-      .pipeThrough(BytesToStringTransformer.stream())
-      .pipeThrough(SSEChunkTransformer.stream());
-    this.cancel = this.#stream.cancel.bind(this.#stream);
-    this.getReader = this.#stream.getReader.bind(this.#stream);
-    this.pipeThrough = this.#stream.pipeThrough.bind(this.#stream);
-    this.pipeTo = this.#stream.pipeTo.bind(this.#stream);
-    this.tee = this.#stream.tee.bind(this.#stream);
+    this.#stream = undefined;
   }
 
-  get events(): TypedEventTarget<EventSourceEvents> {
-    return this.#events;
-  }
-
-  get locked(): boolean {
-    return this.#stream.locked;
+  get connection(): Connection {
+    return this.#connection;
   }
 
   get url(): string {
@@ -104,12 +88,24 @@ export class EventSource implements ReadableStream<ServerSentEvent> {
     return this.#readyState;
   }
 
+  stream(): ReadableStream<ServerSentEvent> {
+    if (this.#stream) {
+      throw new StreamAlreadyCreatedError(`Connection`);
+    } else {
+      this.#stream = new ReadableStream(this.#connection)
+        .pipeThrough(BytesToStringTransformer.stream())
+        .pipeThrough(SSEChunkTransformer.stream());
+      return this.#stream;
+    }
+  }
+
   private handleCloseEvent(evt: CloseEvent): void {
     if (evt.cause) {
       this.#readyState = ReadyState.CONNECTING;
-      this.#events.dispatchEvent(new ErrorEvent(evt.cause));
+      this.dispatchEvent(new ErrorEvent(evt.cause));
     } else {
       this.#readyState = ReadyState.CLOSED;
+      this.dispatchEvent(new ErrorEvent());
     }
   }
 
@@ -118,10 +114,8 @@ export class EventSource implements ReadableStream<ServerSentEvent> {
   }
 
   private handleOpenEvent(): void {
-    console.trace("open");
-    console.log("this.open", this);
     this.#readyState = ReadyState.OPEN;
-    this.#events.dispatchEvent(new OpenEvent());
+    this.dispatchEvent(new OpenEvent());
   }
 
   close() {

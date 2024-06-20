@@ -8,7 +8,7 @@ import { BytesToStringTransformer } from "./bytes-to-string-transformer.js";
 import { SSEChunkTransformer } from "./sse-chunks-transformer.js";
 import type { ServerSentEvent } from "./server-sent-event.type.js";
 import { makeApp } from "./__tests__/make-app.js";
-import { eventCounts } from "./__tests__/eevnt-counts.js";
+import { eventCounts } from "./__tests__/event-counts.js";
 
 function sseStream(connection: Connection): ReadableStream<ServerSentEvent> {
   return connection.stream().pipeThrough(BytesToStringTransformer.stream()).pipeThrough(SSEChunkTransformer.stream());
