@@ -47,8 +47,10 @@ async function receiveSingle(eventStream: string): Promise<ServerSentEvent> {
   });
 }
 
-async function receiveEvents(eventStream: string): Promise<[Array<ServerSentEvent>, SSEChunkTransformer]> {
-  const transformer = new SSEChunkTransformer();
+async function receiveEvents(
+  eventStream: string,
+  transformer: SSEChunkTransformer = new SSEChunkTransformer(),
+): Promise<[Array<ServerSentEvent>, SSEChunkTransformer]> {
   const accumulator: Array<ServerSentEvent> = [];
   return new Promise<[Array<ServerSentEvent>, SSEChunkTransformer]>((resolve) => {
     const controller = new FauxTransformController<ServerSentEvent>({
@@ -165,7 +167,6 @@ data:
     data: "",
     lastEventId: "",
   });
-
 });
 
 test("two identical events", async () => {
@@ -213,7 +214,12 @@ test("retry", async () => {
 retry: 30
 
 `;
-  const [received, transformer] = await receiveEvents(eventStream);
+  const transformer = new SSEChunkTransformer();
+  let retry: undefined | number = undefined;
+  transformer.addEventListener("setRetry", (evt) => {
+    retry = evt.value;
+  });
+  const [received] = await receiveEvents(eventStream, transformer);
   assert.equal(received.length, 1);
   assert.equal(received[0], {
     type: "message",
@@ -221,6 +227,7 @@ retry: 30
     lastEventId: "",
   });
   assert.equal(transformer.retry, 30);
+  assert.equal(retry, 30);
 });
 
 test("retry: non-decimal", async () => {

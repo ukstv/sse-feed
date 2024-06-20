@@ -51,6 +51,7 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
   readonly #fetch: typeof fetch;
 
   #stream: ReadableStream<Uint8Array> | undefined;
+  #retry: number;
 
   // Apparently, controller.close is not idempotent
   // Calling controller.close twice in a row leads to an error
@@ -65,6 +66,15 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
     this.#abortController = new AbortController();
     this.#isControllerClosed = false;
     this.#stream = undefined;
+    this.#retry = 0;
+  }
+
+  get retry(): number {
+    return this.#retry;
+  }
+
+  set retry(value: number) {
+    this.#retry = value;
   }
 
   stream(): ReadableStream<Uint8Array> {

@@ -1,4 +1,5 @@
 import type { ServerSentEvent } from "./server-sent-event.type.js";
+import { TypedEvent, TypedEventTarget } from "./typed-event-target.js";
 
 const LINE_END_REGEXP = new RegExp(/(\r\n)|((?!\r)\n)|(\r(?!\n))/);
 const ANY_CHAR_REGEXP = new RegExp(/[\u0000-\u0009]|[\u000B-\u000C]|[\u000E-\u{10FFFF}]/u);
@@ -17,12 +18,27 @@ function stripBOM(input: string) {
   }
 }
 
-export class SSEChunkTransformer implements Transformer<string, ServerSentEvent> {
+export class SetRetryEvent extends TypedEvent<"setRetry"> {
+  readonly value: number;
+  constructor(value: number) {
+    super("setRetry");
+    this.value = value;
+  }
+}
+
+export type SSEChunkTransformerEvents = {
+  setRetry: SetRetryEvent;
+};
+
+export class SSEChunkTransformer
+  extends TypedEventTarget<SSEChunkTransformerEvents>
+  implements Transformer<string, ServerSentEvent>
+{
   #buffer: string;
-  // TODO Maybe use callback
   #retry: number | undefined;
 
   constructor() {
+    super();
     this.#buffer = "";
     this.#retry = undefined;
   }
@@ -151,6 +167,7 @@ export class SSEChunkTransformer implements Transformer<string, ServerSentEvent>
         if (decimal.toString() === value) {
           // valid decimal
           this.#retry = decimal;
+          this.dispatchEvent(new SetRetryEvent(decimal));
           return accumulator;
         } else {
           // ignore non-decimal
