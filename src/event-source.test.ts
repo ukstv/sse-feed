@@ -14,9 +14,9 @@ import { EventSource } from "./event-source.js";
 
 test("get stream", () => {
   return FauxServer.with(makeApp(), async (url) => {
-    const eventSource = new EventSource(url);
-    const openEvents = eventCounts(eventSource, "open");
-    const closeEvents = eventCounts(eventSource, "close");
+    const eventSource = new EventSource(new URL("/feed", url));
+    const openEvents = eventCounts(eventSource.events, "open");
+    const closeEvents = eventCounts(eventSource.events, "close");
     const reader = eventSource.getReader();
     const a = await reader.read();
     const b = await reader.read();

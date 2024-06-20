@@ -52,10 +52,11 @@ export type EventSourceEvents = ConnectionEvents & {
   error: ErrorEvent;
 };
 
-export class EventSource extends TypedEventTarget<EventSourceEvents> implements ReadableStream<ServerSentEvent> {
+export class EventSource implements ReadableStream<ServerSentEvent> {
   readonly #url: URL;
   readonly #connection: Connection;
   readonly #stream: ReadableStream<ServerSentEvent>;
+  readonly #events: TypedEventTarget<EventSourceEvents>;
 
   #readyState: ReadyState;
 
@@ -66,7 +67,7 @@ export class EventSource extends TypedEventTarget<EventSourceEvents> implements 
   readonly tee: ReadableStream<ServerSentEvent>["tee"];
 
   constructor(endpoint: string | URL, opts: ConnectionOpts = {}, fetchFn: typeof fetch = fetch) {
-    super();
+    this.#events = new TypedEventTarget();
     this.#url = new URL(endpoint, globalThis.origin);
     this.#readyState = ReadyState.CONNECTING;
     this.handleOpenEvent = this.handleOpenEvent.bind(this);
@@ -74,11 +75,9 @@ export class EventSource extends TypedEventTarget<EventSourceEvents> implements 
     this.handleConnectingEvent = this.handleConnectingEvent.bind(this);
 
     this.#connection = new Connection(this.#url, fetchOptions(opts), fetchFn);
-    this.#connection.events.addEventListener("open", function () {
-      // console.log("Connection opened", this);
-    });
-    this.#connection.events.addEventListener("connecting", this.handleConnectingEvent);
-    this.#connection.events.addEventListener("close", this.handleCloseEvent);
+    this.#connection.addEventListener("open", this.handleOpenEvent);
+    this.#connection.addEventListener("connecting", this.handleConnectingEvent);
+    this.#connection.addEventListener("close", this.handleCloseEvent);
     this.#stream = new ReadableStream(this.#connection)
       .pipeThrough(BytesToStringTransformer.stream())
       .pipeThrough(SSEChunkTransformer.stream());
@@ -87,6 +86,10 @@ export class EventSource extends TypedEventTarget<EventSourceEvents> implements 
     this.pipeThrough = this.#stream.pipeThrough.bind(this.#stream);
     this.pipeTo = this.#stream.pipeTo.bind(this.#stream);
     this.tee = this.#stream.tee.bind(this.#stream);
+  }
+
+  get events(): TypedEventTarget<EventSourceEvents> {
+    return this.#events;
   }
 
   get locked(): boolean {
@@ -104,7 +107,7 @@ export class EventSource extends TypedEventTarget<EventSourceEvents> implements 
   private handleCloseEvent(evt: CloseEvent): void {
     if (evt.cause) {
       this.#readyState = ReadyState.CONNECTING;
-      this.dispatchEvent(new ErrorEvent(evt.cause));
+      this.#events.dispatchEvent(new ErrorEvent(evt.cause));
     } else {
       this.#readyState = ReadyState.CLOSED;
     }
@@ -114,18 +117,18 @@ export class EventSource extends TypedEventTarget<EventSourceEvents> implements 
     this.#readyState = ReadyState.CONNECTING;
   }
 
-  private handleOpenEvent(evt: OpenEvent): void {
+  private handleOpenEvent(): void {
     console.trace("open");
     console.log("this.open", this);
     this.#readyState = ReadyState.OPEN;
-    this.dispatchEvent(evt);
+    this.#events.dispatchEvent(new OpenEvent());
   }
 
   close() {
     this.#connection.close();
-    this.#connection.events.removeEventListener("open", this.handleOpenEvent);
-    this.#connection.events.removeEventListener("connecting", this.handleConnectingEvent);
-    this.#connection.events.removeEventListener("close", this.handleCloseEvent);
+    this.#connection.removeEventListener("open", this.handleOpenEvent);
+    this.#connection.removeEventListener("connecting", this.handleConnectingEvent);
+    this.#connection.removeEventListener("close", this.handleCloseEvent);
     this.#readyState = ReadyState.CLOSED;
   }
 }

@@ -11,16 +11,14 @@ import { makeApp } from "./__tests__/make-app.js";
 import { eventCounts } from "./__tests__/eevnt-counts.js";
 
 function sseStream(connection: Connection): ReadableStream<ServerSentEvent> {
-  return new ReadableStream(connection)
-    .pipeThrough(BytesToStringTransformer.stream())
-    .pipeThrough(SSEChunkTransformer.stream());
+  return connection.stream().pipeThrough(BytesToStringTransformer.stream()).pipeThrough(SSEChunkTransformer.stream());
 }
 
 test("get stream", () => {
   return FauxServer.with(makeApp(), async (url) => {
     const connection = new Connection(new URL("/feed", url), {});
-    const openEvents = eventCounts(connection.events, "open");
-    const closeEvents = eventCounts(connection.events, "close");
+    const openEvents = eventCounts(connection, "open");
+    const closeEvents = eventCounts(connection, "close");
     const stream = sseStream(connection);
     const reader = stream.getReader();
     const read1 = await reader.read();
@@ -64,8 +62,8 @@ test("follow redirect", async () => {
     const connection = new Connection(new URL("/redirect-302-a", url), {
       redirect: "follow",
     });
-    const openEvents = eventCounts(connection.events, "open");
-    const closeEvents = eventCounts(connection.events, "close");
+    const openEvents = eventCounts(connection, "open");
+    const closeEvents = eventCounts(connection, "close");
     const stream = sseStream(connection);
     const reader = stream.getReader();
     const a = await reader.read();
@@ -93,8 +91,8 @@ test("reconnect if connection is closed by server", async () => {
   );
   await FauxServer.with(app, async (url) => {
     const connection = new Connection(new URL("/feed", url), {});
-    const openEvents = eventCounts(connection.events, "open");
-    const closeEvents = eventCounts(connection.events, "close");
+    const openEvents = eventCounts(connection, "open");
+    const closeEvents = eventCounts(connection, "close");
     const stream = new ReadableStream(connection);
     const reader = stream.getReader();
     assert.equal(openEvents.size, 0);
@@ -139,8 +137,8 @@ test("no reconnect on 204 no content", async () => {
     const connection = new Connection(new URL("/feed", url), {
       redirect: "follow",
     });
-    const openEvents = eventCounts(connection.events, "open");
-    const closeEvents = eventCounts(connection.events, "close");
+    const openEvents = eventCounts(connection, "open");
+    const closeEvents = eventCounts(connection, "close");
     const stream = sseStream(connection);
     const reader = stream.getReader();
     // Read MAX_CONNECTIONS_TILL_NO_CONTENT values

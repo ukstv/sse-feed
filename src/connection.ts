@@ -1,4 +1,5 @@
 import { TypedEvent, TypedEventTarget } from "./typed-event-target.js";
+import { ServerSentEvent } from "./server-sent-event.type.js";
 
 export type ConnectionEvents = {
   open: OpenEvent;
@@ -43,12 +44,19 @@ function mergeAbortSignals(...signals: Array<AbortSignal>): AbortSignal {
   return AbortSignal.any(signals);
 }
 
-export class Connection {
+export class StreamAlreadyCreatedError extends Error {
+  constructor(name: string) {
+    super(`Stream of ${name} already created`);
+  }
+}
+
+export class Connection extends TypedEventTarget<ConnectionEvents> {
   readonly #url: URL;
   readonly #abortController: AbortController;
   readonly #init: RequestInit;
   readonly #fetch: typeof fetch;
-  readonly #events: TypedEventTarget<ConnectionEvents>;
+
+  #stream: ReadableStream<Uint8Array> | undefined;
 
   // Apparently, controller.close is not idempotent
   // Calling controller.close twice in a row leads to an error
@@ -56,16 +64,22 @@ export class Connection {
   #isControllerClosed: boolean;
 
   constructor(url: URL, init: RequestInit, fetchFn: typeof fetch = fetch) {
+    super();
     this.#url = url;
     this.#init = init;
     this.#fetch = fetchFn;
     this.#abortController = new AbortController();
     this.#isControllerClosed = false;
-    this.#events = new TypedEventTarget<ConnectionEvents>();
+    this.#stream = undefined;
   }
 
-  get events() {
-    return this.#events;
+  stream(): ReadableStream<Uint8Array> {
+    if (this.#stream) {
+      throw new StreamAlreadyCreatedError(`Connection`);
+    } else {
+      this.#stream = new ReadableStream(this);
+      return this.#stream;
+    }
   }
 
   private get isAborted(): boolean {
@@ -87,14 +101,14 @@ export class Connection {
       { once: true },
     );
     while (!this.isAborted) {
-      this.#events.dispatchEvent(new ConnectingEvent());
+      this.dispatchEvent(new ConnectingEvent());
       let response: Response;
       const connectionAbort = new AbortController();
       try {
         const signal = mergeAbortSignals(connectionAbort.signal, this.#abortController.signal);
         response = await this.#fetch(this.#url, { ...this.#init, signal: signal });
       } catch (e) {
-        this.#events.dispatchEvent(new CloseEvent(e as Error));
+        this.dispatchEvent(new CloseEvent(e as Error));
         continue;
       }
       if (response.status === 204) {
@@ -108,11 +122,11 @@ export class Connection {
       if (!body) {
         const error = new Error(`Empty body received`);
         connectionAbort.abort(error);
-        this.#events.dispatchEvent(new CloseEvent(error));
+        this.dispatchEvent(new CloseEvent(error));
         continue;
       }
       const reader = body.getReader();
-      this.#events.dispatchEvent(new OpenEvent());
+      this.dispatchEvent(new OpenEvent());
       try {
         let shallRead = true;
         while (!this.isAborted && shallRead) {
@@ -122,10 +136,10 @@ export class Connection {
         }
       } catch (e) {
         connectionAbort.abort(e);
-        this.#events.dispatchEvent(new CloseEvent(e as Error));
+        this.dispatchEvent(new CloseEvent(e as Error));
         continue;
       }
-      this.#events.dispatchEvent(new CloseEvent());
+      this.dispatchEvent(new CloseEvent());
     }
   }
 

@@ -21,7 +21,7 @@ setTimeout(() => {
   abortController.abort(new Error("ABORT"));
 }, 2000);
 try {
-  await new ReadableStream(c).pipeTo(writableConsole, { signal: abortController.signal });
+  await c.stream().pipeTo(writableConsole, { signal: abortController.signal });
 } catch (error) {
   console.log("done-error");
   console.log(error);
