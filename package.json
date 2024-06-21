@@ -11,6 +11,10 @@
   "files": [
     "dist"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:ukstv/sse-feed.git"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "keywords": [
