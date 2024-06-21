@@ -1,6 +1,6 @@
 {
   "name": "sse-feed",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "SSE as a ReadableStream",
   "type": "module",
   "scripts": {
@@ -8,6 +8,11 @@
     "test": "./node_modules/.bin/tsx ./node_modules/uvu/bin.js . .+\\.test\\.ts",
     "test:watch": "./node_modules/.bin/watchlist --eager src -- pnpm run test"
   },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "keywords": [
     "server-sent events",
     "sse",
