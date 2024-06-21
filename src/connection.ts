@@ -44,14 +44,15 @@ function mergeAbortSignals(...signals: Array<AbortSignal>): AbortSignal {
   return AbortSignal.any(signals);
 }
 
+export type ConnectionFetchFn = (url: string | URL, init?: RequestInit) => Promise<Response>;
+
 export class Connection extends TypedEventTarget<ConnectionEvents> {
   readonly #url: URL;
   readonly #abortController: AbortController;
-  readonly #fetch: typeof fetch;
+  readonly #fetch: ConnectionFetchFn;
 
   #stream: ReadableStream<Uint8Array> | undefined;
 
-  init: RequestInit;
   retry: number;
 
   // Apparently, controller.close is not idempotent
@@ -59,14 +60,13 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
   // So we only call it if it has not been called previously
   #isControllerClosed: boolean;
 
-  constructor(url: URL, init: RequestInit, fetchFn: typeof fetch = fetch) {
+  constructor(url: URL, fetchFn: ConnectionFetchFn = fetch) {
     super();
     this.#url = url;
     this.#fetch = fetchFn;
     this.#abortController = new AbortController();
     this.#isControllerClosed = false;
     this.#stream = undefined;
-    this.init = init;
     this.retry = 0;
   }
 
@@ -103,7 +103,7 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
       const connectionAbort = new AbortController();
       try {
         const signal = mergeAbortSignals(connectionAbort.signal, this.#abortController.signal);
-        response = await this.#fetch(this.#url, { ...this.init, signal: signal });
+        response = await this.#fetch(this.#url, { signal: signal });
       } catch (e) {
         this.dispatchEvent(new CloseEvent(e as Error));
         continue;
@@ -137,12 +137,7 @@ export class Connection extends TypedEventTarget<ConnectionEvents> {
         continue;
       }
       this.dispatchEvent(new CloseEvent());
-      await this.waitRetry(this.retry);
     }
-  }
-
-  async waitRetry(ms: number): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**

@@ -1,5 +1,5 @@
 import { TypedEvent, TypedEventTarget } from "./typed-event-target.js";
-import { ConnectingEvent, Connection, OpenEvent, CloseEvent } from "./connection.js";
+import { ConnectingEvent, Connection, OpenEvent, CloseEvent, ConnectionFetchFn } from "./connection.js";
 import { BytesToStringTransformer } from "./bytes-to-string-transformer.js";
 import { SSEChunkTransformer } from "./sse-chunks-transformer.js";
 import { ServerSentEvent } from "./server-sent-event.type.js";
@@ -70,15 +70,32 @@ export class EventSource extends TypedEventTarget<EventSourceEvents> {
     this.handleCloseEvent = this.handleCloseEvent.bind(this);
     this.handleConnectingEvent = this.handleConnectingEvent.bind(this);
 
-    this.#connection = new Connection(this.#url, fetchOptions(opts), fetchFn);
+    this.#sseChunkTransformer = new SSEChunkTransformer();
+    const customFetch: ConnectionFetchFn = async (url, init) => {
+      await new Promise<void>((resolve) => setTimeout(resolve, this.#sseChunkTransformer.retry));
+      const effectiveInit = {
+        ...fetchOptions(opts),
+        ...init,
+      };
+      const lastEventId = this.#sseChunkTransformer.lastEventId;
+      if (lastEventId) {
+        effectiveInit.headers = {
+          ...effectiveInit.headers,
+          "Last-Event-Id": lastEventId,
+        };
+      }
+      return fetch(url, effectiveInit);
+    };
+
+    this.#connection = new Connection(this.#url, customFetch);
     this.#connection.addEventListener("open", this.handleOpenEvent);
     this.#connection.addEventListener("connecting", this.handleConnectingEvent);
     this.#connection.addEventListener("close", this.handleCloseEvent);
-    this.#sseChunkTransformer = new SSEChunkTransformer();
-    this.#sseChunkTransformer.addEventListener("setRetry", (evt) => {
-      this.#connection.retry = evt.value;
-    });
     this.#stream = undefined;
+  }
+
+  get retry(): number {
+    return this.#sseChunkTransformer.retry;
   }
 
   get connection(): Connection {

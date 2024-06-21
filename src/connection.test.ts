@@ -3,7 +3,7 @@ import * as assert from "uvu/assert";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { FauxServer } from "./__tests__/faux-server.js";
-import { Connection } from "./connection.js";
+import { Connection, ConnectionFetchFn } from "./connection.js";
 import { BytesToStringTransformer } from "./bytes-to-string-transformer.js";
 import { SSEChunkTransformer } from "./sse-chunks-transformer.js";
 import type { ServerSentEvent } from "./server-sent-event.type.js";
@@ -16,7 +16,7 @@ function sseStream(connection: Connection): ReadableStream<ServerSentEvent> {
 
 test("get stream", () => {
   return FauxServer.with(makeApp(), async (url) => {
-    const connection = new Connection(new URL("/feed", url), {});
+    const connection = new Connection(new URL("/feed", url));
     const openEvents = eventCounts(connection, "open");
     const closeEvents = eventCounts(connection, "close");
     const stream = sseStream(connection);
@@ -59,9 +59,13 @@ test("follow redirect", async () => {
       return c.redirect("/redirect-307-b", 302);
     });
   await FauxServer.with(app, async (url) => {
-    const connection = new Connection(new URL("/redirect-302-a", url), {
-      redirect: "follow",
-    });
+    const fetchFn: ConnectionFetchFn = (url, init) => {
+      return fetch(url, {
+        ...init,
+        redirect: "follow",
+      });
+    };
+    const connection = new Connection(new URL("/redirect-302-a", url), fetchFn);
     const openEvents = eventCounts(connection, "open");
     const closeEvents = eventCounts(connection, "close");
     const stream = sseStream(connection);
@@ -90,7 +94,7 @@ test("reconnect if connection is closed by server", async () => {
     }),
   );
   await FauxServer.with(app, async (url) => {
-    const connection = new Connection(new URL("/feed", url), {});
+    const connection = new Connection(new URL("/feed", url));
     const openEvents = eventCounts(connection, "open");
     const closeEvents = eventCounts(connection, "close");
     const stream = new ReadableStream(connection);
@@ -134,9 +138,7 @@ test("no reconnect on 204 no content", async () => {
     });
   });
   await FauxServer.with(app, async (url) => {
-    const connection = new Connection(new URL("/feed", url), {
-      redirect: "follow",
-    });
+    const connection = new Connection(new URL("/feed", url));
     const openEvents = eventCounts(connection, "open");
     const closeEvents = eventCounts(connection, "close");
     const stream = sseStream(connection);

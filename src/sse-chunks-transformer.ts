@@ -18,31 +18,23 @@ function stripBOM(input: string) {
   }
 }
 
-export class SetRetryEvent extends TypedEvent<"setRetry"> {
-  readonly value: number;
-  constructor(value: number) {
-    super("setRetry");
-    this.value = value;
-  }
-
-  [Symbol.for("nodejs.util.inspect.custom")]() {
-    return `SetRetryEvent(${this.value})`;
-  }
-}
-
-export type SSEChunkTransformerEvents = {
-  setRetry: SetRetryEvent;
-};
-
-export class SSEChunkTransformer
-  extends TypedEventTarget<SSEChunkTransformerEvents>
-  implements Transformer<string, ServerSentEvent>
-{
+export class SSEChunkTransformer implements Transformer<string, ServerSentEvent> {
   #buffer: string;
+  #retry: number;
+  #lastEventId: string | undefined;
 
   constructor() {
-    super();
     this.#buffer = "";
+    this.#retry = 0;
+    this.#lastEventId = undefined;
+  }
+
+  get lastEventId(): string | undefined {
+    return this.#lastEventId;
+  }
+
+  get retry() {
+    return this.#retry;
   }
 
   static stream(): TransformStream<string, ServerSentEvent> {
@@ -111,27 +103,6 @@ export class SSEChunkTransformer
       this.#buffer = this.#buffer.substring(fullLineLength);
       return this.processLines(controller, nextAccumulator);
     }
-
-    // if (lineFound.startsWith(":")) {
-    //   // Comment, hence ignore the line
-    //   this.#buffer = this.#buffer.substring(fullLineLength + 1);
-    //   return this.processLines(controller, accumulator);
-    // }
-    //
-    // const fieldMatch = FIELD_VALUE_REGEXP.exec(lineFound);
-    // if (fieldMatch) {
-    //   const field = fieldMatch[1];
-    //   const value = fieldMatch[2];
-    //   const nextAccumulator = this.processField(field, value, accumulator);
-    //   this.#buffer = this.#buffer.slice(fullLineLength);
-    //   return this.processLines(controller, nextAccumulator);
-    // } else {
-    //   const field = lineFound;
-    //   const value = "";
-    //   const nextAccumulator = this.processField(field, value, accumulator);
-    //   this.#buffer = this.#buffer.slice(fullLineLength);
-    //   return this.processLines(controller, nextAccumulator);
-    // }
   }
 
   processField(field: string, value: string, accumulator: Partial<ServerSentEvent>): Partial<ServerSentEvent> {
@@ -153,6 +124,7 @@ export class SSEChunkTransformer
         };
       }
       case "id": {
+        this.#lastEventId = value;
         // If the field value does not contain U+0000 NULL, then set the last event ID buffer to the field value. Otherwise, ignore the field.
         return {
           ...accumulator,
@@ -164,7 +136,7 @@ export class SSEChunkTransformer
         const decimal = parseInt(value, 10);
         if (decimal.toString() === value) {
           // valid decimal
-          this.dispatchEvent(new SetRetryEvent(decimal));
+          this.#retry = decimal;
           return accumulator;
         } else {
           // ignore non-decimal

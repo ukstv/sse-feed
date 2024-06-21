@@ -6,7 +6,6 @@ import { FauxServer } from "./__tests__/faux-server.js";
 import { makeApp } from "./__tests__/make-app.js";
 import { eventCounts } from "./__tests__/event-counts.js";
 import { EventSource } from "./event-source.js";
-import sinon from "sinon";
 
 test("get stream", () => {
   return FauxServer.with(makeApp(), async (url) => {
@@ -143,8 +142,9 @@ test("no reconnect on 204 no content", async () => {
   });
 });
 
+// Beware: due to a bug in Hono node-server https://github.com/honojs/node-server/issues/179
+// this test fails the whole suite
 // test("can connect via POST", async () => {
-//   // Beware: due to a bug in
 //   const app = new Hono().post("/feed-post", (c) => {
 //     let id = 0;
 //     return streamSSE(c, async (stream) => {
@@ -193,19 +193,55 @@ test("respects retry", async () => {
   return FauxServer.with(app, async (url) => {
     const eventSource = new EventSource(new URL("/feed-post", url), { method: "POST" });
     const reader = eventSource.stream().getReader();
-    const waitSpy = sinon.spy(eventSource.connection, "waitRetry");
     await reader.read();
+    assert.equal(eventSource.retry, 0);
     await reader.read();
+    assert.equal(eventSource.retry, 100);
     await reader.read();
-    assert.equal(waitSpy.args, [[0], [100]]);
+    assert.equal(eventSource.retry, 200);
     eventSource.close();
   });
 });
 
-test('handle last event id', async () => {
-
-})
-
-// TODO handle last Event id
+test("handle last event id", async () => {
+  const app = new Hono().post("/feed-post", (c) => {
+    const lastEventIdRequested = c.req.header("Last-Event-Id");
+    return streamSSE(c, async (stream) => {
+      if (lastEventIdRequested) {
+        const nextId = parseInt(lastEventIdRequested, 10) + 1;
+        await stream.writeSSE({
+          data: String(nextId),
+          id: String(nextId),
+        });
+      } else {
+        await stream.writeSSE({
+          data: "0",
+          id: "0",
+        });
+      }
+      await stream.close();
+    });
+  });
+  return FauxServer.with(app, async (url) => {
+    const eventSource = new EventSource(new URL("/feed-post", url), { method: "POST" });
+    const reader = eventSource.stream().getReader();
+    const read1 = await reader.read();
+    assert.equal(read1, {
+      done: false,
+      value: { type: "message", data: "0", lastEventId: "0" },
+    });
+    const read2 = await reader.read();
+    assert.equal(read2, {
+      done: false,
+      value: { type: "message", data: "1", lastEventId: "1" },
+    });
+    const read3 = await reader.read();
+    assert.equal(read3, {
+      done: false,
+      value: { type: "message", data: "2", lastEventId: "2" },
+    });
+    eventSource.close();
+  });
+});
 
 test.run();

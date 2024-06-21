@@ -8,7 +8,12 @@
 
 import { Connection } from "./connection.js";
 
-const c = new Connection(new URL("http://localhost:3000/feed"), { method: "GET" });
+const c = new Connection(new URL("http://localhost:3000/feed"), (url: URL | string, init?: RequestInit) => {
+  return fetch(url, {
+    ...init,
+    method: "GET",
+  });
+});
 const writableConsole = new WritableStream<Uint8Array>({
   async write(chunk: Uint8Array) {
     const textDecoder = new TextDecoder();
